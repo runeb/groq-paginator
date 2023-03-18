@@ -1,7 +1,7 @@
 import { describe, beforeEach, expect, test } from "vitest";
 import { parse, evaluate } from "groq-js";
 import { createPaginatedQuery, type PaginatedQuery, type PaginatedQueryOptions } from "../src";
-import { SanityDocument } from "@sanity/client";
+import { SanityDocument, SanityDocumentStub } from "@sanity/client";
 
 let dataset = [
   // Page 0
@@ -41,13 +41,15 @@ let dataset = [
   { _id: "u", _type: "test", order: 21 },
 ];
 
-const client = {
-  fetch: async (query: string, params?: Record<string, any>): Promise<SanityDocument[]> => {
-    let tree = parse(query);
-    let value = await evaluate(tree, { dataset });
-    let result = await value.get();
-    return result;
-  },
+const createMockClient = (_dataset: SanityDocumentStub[]) => {
+  return {
+    fetch: async (query: string, params?: Record<string, any>): Promise<any> => {
+      let tree = parse(query);
+      let value = await evaluate(tree, { dataset: _dataset });
+      let result = await value.get();
+      return result;
+    },
+  };
 };
 
 declare module 'vitest' {
@@ -57,7 +59,7 @@ declare module 'vitest' {
 }
 
 const defaultOptions: PaginatedQueryOptions = {
-  client: client,
+  client: createMockClient(dataset),
   query: "*",
   filter: '_type == "test"',
   order: ["order", "asc"],
@@ -73,11 +75,11 @@ beforeEach(async (context) => {
 
 describe("createPaginatedQuery", () => {
 
-  test("numPages", async ({pq}) => {
+  test("numPages", async ({ pq }) => {
     expect(await pq.numPages()).to.equal(5);
   });
 
-  test("getPage(0)", async ({pq}) => {
+  test("getPage(0)", async ({ pq }) => {
     const res = await pq.getPage(0);
     const ids = res.map((r: any) => r._id);
     expect(ids).to.eql(["a", "b", "c", "drafts.d", "e"]);
@@ -85,7 +87,7 @@ describe("createPaginatedQuery", () => {
     expect(ordering).to.eql([1, 2, 3, 4, 5]);
   });
 
-  test("getPage(4)", async ({pq}) => {
+  test("getPage(4)", async ({ pq }) => {
     const res = await pq.getPage(4);
     const ids = res.map((r: any) => r._id);
     expect(ids).to.eql(["u"]);
@@ -93,7 +95,7 @@ describe("createPaginatedQuery", () => {
     expect(ordering).to.eql([21]);
   });
 
-  test("getPage(1)", async ({pq}) => {
+  test("getPage(1)", async ({ pq }) => {
     const res = await pq.getPage(1);
     const ids = res.map((r: any) => r._id);
     expect(ids).to.eql(["f", "g", "drafts.h", "i", "j"]);
@@ -101,7 +103,7 @@ describe("createPaginatedQuery", () => {
     expect(ordering).to.eql([6, 7, 8, 9, 10]);
   });
 
-  test("nextPage from 0", async ({pq}) => {
+  test("nextPage from 0", async ({ pq }) => {
     await pq.getPage(0);
     const res = await pq.nextPage();
     const ids = res.map((r: any) => r._id);
@@ -110,7 +112,7 @@ describe("createPaginatedQuery", () => {
     expect(ordering).to.eql([6, 7, 8, 9, 10]);
   })
 
-  test("nextPage x 2 from 0", async ({pq}) => {
+  test("nextPage x 2 from 0", async ({ pq }) => {
     await pq.getPage(0);
     await pq.nextPage();
     const res = await pq.nextPage();
@@ -120,7 +122,7 @@ describe("createPaginatedQuery", () => {
     expect(ordering).to.eql([11, 12, 13, 14, 15]);
   })
 
-  test("nextPage from 1", async ({pq}) => {
+  test("nextPage from 1", async ({ pq }) => {
     await pq.getPage(1);
     const res = await pq.nextPage();
     const ids = res.map((r: any) => r._id);
@@ -129,7 +131,7 @@ describe("createPaginatedQuery", () => {
     expect(ordering).to.eql([11, 12, 13, 14, 15]);
   })
 
-  test("nextPage from 2", async ({pq}) => {
+  test("nextPage from 2", async ({ pq }) => {
     await pq.getPage(2);
     const res = await pq.nextPage();
     const ids = res.map((r: any) => r._id);
@@ -140,7 +142,7 @@ describe("createPaginatedQuery", () => {
 
   test('getPage inverse sort order', async () => {
     const pq = createPaginatedQuery({
-      client: client,
+      client: createMockClient(dataset),
       query: "*",
       filter: '_type == "test"',
       order: ["order", "desc"],
@@ -154,7 +156,7 @@ describe("createPaginatedQuery", () => {
     expect(ordering).to.eql([21, 20, 19]);
   })
 
-  test("previousPage() alone returns first page", async ({pq}) => {
+  test("previousPage() alone returns first page", async ({ pq }) => {
     const res = await pq.previousPage();
     const ids = res.map((r: any) => r._id);
     expect(ids).to.eql(["a", "b", "c", "drafts.d", "e"]);
@@ -162,7 +164,7 @@ describe("createPaginatedQuery", () => {
     expect(ordering).to.eql([1, 2, 3, 4, 5]);
   })
 
-  test("previousPage() with currentPage 1", async ({pq}) => {
+  test("previousPage() with currentPage 1", async ({ pq }) => {
     await pq.getPage(1);
     const res = await pq.previousPage();
     const ids = res.map((r: any) => r._id);
@@ -171,12 +173,34 @@ describe("createPaginatedQuery", () => {
     expect(ordering).to.eql([1, 2, 3, 4, 5]);
   })
 
-  test("previousPage() with currentPage 4", async ({pq}) => {
+  test("previousPage() with currentPage 4", async ({ pq }) => {
     await pq.getPage(4);
     const res = await pq.previousPage();
     const ids = res.map((r: any) => r._id);
     expect(ids).to.eql(["drafts.p", "drafts.q", "drafts.r", "drafts.s", "drafts.t"]);
     const ordering = res.map((r: any) => r.order);
     expect(ordering).to.eql([16, 17, 18, 19, 20]);
+  })
+});
+
+describe("createPaginatedQuery with pagination filter", () => {
+  test("it tiebreaks", async () => {
+    const ambiguousOrderDataset = [
+      { _id: "a", _type: "test", order: 1 },
+      { _id: "b", _type: "test", order: 2 },
+      { _id: "c", _type: "test", order: 2 },
+      { _id: "d", _type: "test", order: 3 },
+    ]
+    const pq = createPaginatedQuery({
+      ...defaultOptions,
+      order: ["order", "asc"],
+      pageSize: 2,
+      client: createMockClient(ambiguousOrderDataset),
+    })
+
+    const res = await pq.getPage(0);
+    expect(res.map((r: any) => r._id)).to.eql(["a", "b"]);
+    const nextRes = await pq.nextPage();
+    expect(nextRes.map((r: any) => r._id)).to.eql(["c", "d"]);
   })
 });
