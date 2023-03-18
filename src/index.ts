@@ -27,9 +27,11 @@ export const createPaginatedQuery = (
   const { client, filter, projection, pageSize } = options;
   const [order, direction] = options.order;
 
-  let currentPage: number | undefined;
-  let lastMax: string | undefined;
-  let lastMin: string | undefined;
+  let currentPage: number | undefined = undefined;
+  let lastOrderFieldMin: string | undefined = undefined;
+  let lastOrderFieldMax: string | undefined = undefined;
+  let lastMinId: string | undefined = undefined;
+  let lastMaxId: string | undefined = undefined;
 
   const query = (
     filter: string,
@@ -48,14 +50,21 @@ export const createPaginatedQuery = (
   } [${start}...${end}]
   `;
 
+  const saveBounds = (results: SanityDocument[]) => {
+    lastOrderFieldMin = results[0][order];
+    lastOrderFieldMax = results[results.length - 1][order];
+    lastMinId = results[0]._id;
+    lastMaxId = results[results.length - 1]._id;
+  };
+
   // This operation can be expensive, and will get slower the higher the page
   // number. Should only be used when you know the page you want to go to, or
   // to load an initial page. Browsing should be done with nextPage and
-  // previousPage
+  // previousPage. Optimal performance is to get the first page, then use
+  // nextPage and previousPage to browse.
   const getPage = (page: number) => {
     const start = page * pageSize;
     const end = start + pageSize;
-    lastMax = undefined;
     return client
       .fetch<SanityDocument[]>(query(
         filter,
@@ -68,8 +77,7 @@ export const createPaginatedQuery = (
       )
       .then((results) => {
         currentPage = page;
-        lastMin = results[0][order];
-        lastMax = results[results.length - 1][order];
+        saveBounds(results);
         return results;
       });
   };
@@ -82,15 +90,14 @@ export const createPaginatedQuery = (
           filter,
           order,
           direction,
-          order + ' > ' + lastMax,
+          `(${order} > ${lastOrderFieldMax} || (${order} == ${lastOrderFieldMax} && _id > "${lastMaxId}"))`,
           0,
           pageSize
         )
       )
       .then((results) => {
         currentPage = currentPage ? currentPage + 1 : 0;
-        lastMin = results[0][order];
-        lastMax = results[results.length - 1][order];
+        saveBounds(results);
         return results;
       });
   };
@@ -99,7 +106,7 @@ export const createPaginatedQuery = (
     if (currentPage === undefined) return getPage(0);
     const inverseDirection = direction === 'asc' ? 'desc' : 'asc';
     const previousPageQuery = `
-*[${filter} && ${order} < ${lastMin}] | order(${order} ${inverseDirection}) {
+*[${filter} && ${order} < ${lastOrderFieldMin}] | order(${order} ${inverseDirection}) {
     "_isDraft": _id in path("drafts.*"),
     "_publishedId": string::split(_id, "drafts.")[1],
     "document": @ {${projection}}
@@ -113,8 +120,7 @@ export const createPaginatedQuery = (
       )
       .then((results) => {
         currentPage = currentPage ? currentPage - 1 : 0;
-        lastMin = results[0][order];
-        lastMax = results[results.length - 1][order];
+        saveBounds(results);
         return results;
       });
   }
@@ -123,7 +129,7 @@ export const createPaginatedQuery = (
   * This is an expensive operation, and should only be used when you absolutely
   * need to know the total number of pages. It will fetch all documents that
   * match the filter, de-dupe them, and then count them. This is potentially a
-  * 1+n operation.
+  * 1+N operation.
   */
   const numPages = async () => {
     const countQuery = `count(*[${filter}] {
