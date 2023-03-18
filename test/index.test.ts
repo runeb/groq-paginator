@@ -120,4 +120,20 @@ describe("createPaginatedQuery", () => {
     const ordering = res.map((r: any) => r.order);
     expect(ordering).to.eql([16, 17, 18, 19, 20]);
   })
+
+  test('getPage inverse sort order', async () => {
+    const pq = createPaginatedQuery({
+      client: client,
+      query: "*",
+      filter: '_type == "test"',
+      order: ["order", "desc"],
+      projection: "order, _id",
+      pageSize: 3,
+    })
+    const res = await pq.getPage(0);
+    const ids = res.map((r: any) => r._id);
+    expect(ids).to.eql(["u", "drafts.t", "drafts.s"]);
+    const ordering = res.map((r: any) => r.order);
+    expect(ordering).to.eql([21, 20, 19]);
+  })
 });

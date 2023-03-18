@@ -26,7 +26,6 @@ export const createPaginatedQuery = (
   const [order, direction] = options.order;
 
   let currentPage: number | undefined;
-  let lastMin: string | undefined;
   let lastMax: string | undefined;
 
   const query = (
@@ -41,7 +40,7 @@ export const createPaginatedQuery = (
     "_isDraft": _id in path("drafts.*"),
     "_publishedId": string::split(_id, "drafts.")[1],
     "document": @ {${projection}}
-  }[!_isDraft || _isDraft && count(*[_id == ^._publishedId]._id) == 0] {
+  }[!_isDraft || count(*[_id == ^._publishedId]._id) == 0] {
     ...document,
   } [${start}...${end}]
   `;
@@ -50,7 +49,6 @@ export const createPaginatedQuery = (
     const start = page * pageSize;
     const end = start + pageSize;
     lastMax = undefined;
-    lastMin = undefined;
     return client
       .fetch(query(
         filter,
@@ -63,7 +61,6 @@ export const createPaginatedQuery = (
       )
       .then((results) => {
         currentPage = page;
-        lastMin = results[0][order];
         lastMax = results[results.length - 1][order];
         return results;
       });
@@ -84,7 +81,6 @@ export const createPaginatedQuery = (
       )
       .then((results) => {
         currentPage = currentPage ? currentPage + 1 : 0;
-        lastMin = results[0][order];
         lastMax = results[results.length - 1][order];
         return results;
       });
