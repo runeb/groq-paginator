@@ -187,7 +187,9 @@ describe("createPaginatedQuery with pagination filter", () => {
   test("it tiebreaks nextPage()", async () => {
     const ambiguousOrderDataset = [
       { _id: "a", _type: "test", order: 1 },
-      { _id: "b", _type: "test", order: 2 },
+      { _id: "drafts.b", _type: "test", order: 2 }, // same order as c
+      { _id: "b", _type: "test", order: 2 }, // same order as c
+      { _id: "drafts.c", _type: "test", order: 2 },
       { _id: "c", _type: "test", order: 2 },
       { _id: "d", _type: "test", order: 3 },
     ]
@@ -198,16 +200,21 @@ describe("createPaginatedQuery with pagination filter", () => {
       client: createMockClient(ambiguousOrderDataset),
     })
 
-    await pq.getPage(0);
+    const res = await pq.getPage(0);
+    expect(res.map((r: any) => r._id)).to.eql(["a", "b"]);
     const nextRes = await pq.nextPage();
     expect(nextRes.map((r: any) => r._id)).to.eql(["c", "d"]);
   })
 
   test("it tiebreaks previousPage()", async () => {
     const ambiguousOrderDataset = [
+      { _id: "drafts.a", _type: "test", order: 1 },
       { _id: "a", _type: "test", order: 1 },
-      { _id: "b", _type: "test", order: 2 },
+      { _id: "b", _type: "test", order: 2 }, // same order as c
+      { _id: "drafts.b", _type: "test", order: 2 }, // same order as c
+      { _id: "drafts.c", _type: "test", order: 2 },
       { _id: "c", _type: "test", order: 2 },
+      { _id: "drafts.d", _type: "test", order: 3 },
       { _id: "d", _type: "test", order: 3 },
     ]
     const pq = createPaginatedQuery({
@@ -217,7 +224,8 @@ describe("createPaginatedQuery with pagination filter", () => {
       client: createMockClient(ambiguousOrderDataset),
     })
 
-    await pq.getPage(1);
+    const res = await pq.getPage(1);
+    expect(res.map((r: any) => r._id)).to.eql(["c", "d"]);
     const nextRes = await pq.previousPage();
     expect(nextRes.map((r: any) => r._id)).to.eql(["a", "b"]);
   })
