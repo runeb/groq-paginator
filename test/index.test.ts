@@ -44,7 +44,6 @@ let dataset = [
 const createMockClient = (_dataset: SanityDocumentStub[]) => {
   return {
     fetch: async (query: string, params?: Record<string, any>): Promise<any> => {
-      console.log("fetch", query, params);
       let tree = parse(query);
       let value = await evaluate(tree, { dataset: _dataset });
       let result = await value.get();
