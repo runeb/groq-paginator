@@ -21,15 +21,12 @@ export type PaginatedQuery = {
   numPages: () => Promise<number>;
 };
 
-// Implementing a paginated query in Sanity is a bit tricky. The query
-// language is not very expressive, and the API is not very well suited for
-// pagination. This function creates a paginated query object that can be used
-// to fetch pages of results. The query is implemented by fetching the first
-// page, and then using the last result to filter the next page, and so on.
-// This means that the query is not very efficient, and will get slower the
-// higher the page number. It is recommended to use this function to get the
-// first page, and then use nextPage and previousPage to browse the results.
-
+// This function creates a paginated query object that can be used to fetch
+// pages of results. The query is implemented by fetching the first page, and
+// then using the last result to filter the next page, and so on.  This means
+// that the query is not very efficient, and will get slower the higher the page
+// number. It is recommended to use this function to get the first page, and
+// then use nextPage and previousPage to browse the results.
 // See https://www.sanity.io/docs/paginating-with-groq for more information
 export const createPaginatedQuery = (
   options: PaginatedQueryOptions
@@ -114,6 +111,7 @@ export const createPaginatedQuery = (
 
   const previousPage = async () => {
     if (currentPage === undefined) return getPage(0);
+    // Get the inverse sorting of previous documents, then reverse the results
     const inverseDirection = direction === 'asc' ? 'desc' : 'asc';
     const previousPageQuery = `
 *[${filter} && (${order} < ${lastOrderFieldMin} || ${order} == ${lastOrderFieldMin} && _id < "${lastMinId}")] | order(${order} ${inverseDirection}) {
